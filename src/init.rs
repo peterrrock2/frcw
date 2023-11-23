@@ -68,7 +68,7 @@ pub fn graph_from_networkx(
     let mut edges_start = vec![0 as usize; num_nodes];
     let mut attr = HashMap::new();
     for col in columns.to_vec().into_iter() {
-        attr.insert(col, Vec::<u32>::with_capacity(num_nodes));
+        attr.insert(col, Vec::<String>::with_capacity(num_nodes));
     }
 
     for (index, (node, adj)) in raw_nodes.iter().zip(raw_adj.iter()).enumerate() {
@@ -81,7 +81,13 @@ pub fn graph_from_networkx(
             .collect();
         for col in columns.iter() {
             if let Some(data) = attr.get_mut(col) {
-                data.push(node[col].as_u64().unwrap() as u32);
+                match node.get(col) {
+                    Some(value) => data.push(value.to_string()),
+                    None => {
+                        eprintln!("Failed to unwrap at column '{}', value {:?}", col, node[col]);
+                        panic!("Unexpected None while unwrapping.");
+                    }
+                }
             }
         }
         pops.push(node[pop_col].as_u64().unwrap() as u32);

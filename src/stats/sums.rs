@@ -21,18 +21,27 @@ pub fn partition_attr_sums(graph: &Graph, partition: &Partition, attr: &str) -> 
     partition
         .dist_nodes
         .iter()
-        .map(|nodes| nodes.iter().map(|&n| values[n]).sum())
+        .map(|nodes| {
+            nodes.iter()
+                .map(|&n| values[n].parse::<u32>())
+                .collect::<Result<Vec<u32>, _>>()
+                .map_or(0, |nums| nums.iter().sum::<u32>())
+        })
         .collect()
 }
 
 /// Computes sums over statistics for the two new districts in a proposal.
-pub fn proposal_sums(graph: &Graph, proposal: &RecomProposal) -> HashMap<String, (u32, u32)> {
+pub fn proposal_sums(graph: &Graph, proposal: &RecomProposal) -> HashMap<String, (i32, i32)> {
     return graph
         .attr
         .iter()
         .map(|(key, values)| {
-            let a_sum = proposal.a_nodes.iter().map(|&n| values[n]).sum();
-            let b_sum = proposal.b_nodes.iter().map(|&n| values[n]).sum();
+            let a_sum = proposal.a_nodes.iter().map(|&n| values[n].parse::<i32>())
+                            .collect::<Result<Vec<i32>, _>>()
+                            .map_or(0, |nums| nums.iter().sum::<i32>());
+            let b_sum = proposal.b_nodes.iter().map(|&n| values[n].parse::<i32>())
+                            .collect::<Result<Vec<i32>, _>>()
+                            .map_or(0, |nums| nums.iter().sum::<i32>());
             return (key.clone(), (a_sum, b_sum));
         })
         .collect();
