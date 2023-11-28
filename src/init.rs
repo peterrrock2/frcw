@@ -33,7 +33,15 @@ pub fn from_networkx(
     let raw_nodes = data["nodes"].as_array().unwrap();
     let assignments: Vec<u32> = raw_nodes
         .iter()
-        .map(|node| node[assignment_col].as_u64().unwrap() as u32)
+        .map(|node| {
+            match &node[assignment_col] {
+                serde_json::Value::Number(num) => num.as_u64().unwrap() as u32,
+                serde_json::Value::String(ref s) => s.parse::<u32>().unwrap(),
+                _ => panic!("{}{}",
+                            "Unexpected entry type in assignment column. ",
+                            "Please make sure that all entries can be interpreted as positive numbers."),
+            }
+        })
         .collect();
     let partition = Partition::from_assignments(&graph, &assignments).unwrap();
     return Ok((graph, partition));
