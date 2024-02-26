@@ -41,7 +41,7 @@ struct ResultPacket {
     /// Self-loop statistics.
     counts: SelfLoopCounts,
     /// ≥0 valid proposals generated within the unit of work.
-    proposals: Vec<RecomProposal>,
+    proposals: Vec<(usize, RecomProposal)>,
 }
 
 /// Information necessary to compute statistics about an accepted proposal.
@@ -156,7 +156,7 @@ fn start_job_thread(
             None => {}
         }
         let mut counts = SelfLoopCounts::default();
-        let mut proposals = Vec::<RecomProposal>::new();
+        let mut proposals = Vec::<(usize, RecomProposal)>::new();
         for _ in 0..next.n_steps {
             // Step 1: sample a pair of adjacent districts.
             let (dist_a, dist_b);
@@ -223,13 +223,17 @@ fn start_job_thread(
                             );
                         }
                         if rng.gen::<f64>() < prob {
-                            proposals.push(proposal_buf.clone());
+                            // the proposal needs to have a unique identifier so that when the
+                            // packets finish, the selected plan is close to deterministic
+                            // chance of a single batch getting duplicate numbers is near zero 
+                            // for batches of size < 1M and n_cores < 10k over a 1B run
+                            proposals.push((rng.gen(), proposal_buf.clone()));
                         } else {
                             counts.inc(SelfLoopReason::SeamLength);
                         }
                     } else {
                         // Accept.
-                        proposals.push(proposal_buf.clone());
+                        proposals.push((rng.gen(), proposal_buf.clone()));
                     }
                 }
                 Err(_) => counts.inc(SelfLoopReason::NoSplit), // TODO: break out errors?
@@ -342,15 +346,19 @@ pub fn multi_chain(
         let mut sampled = SelfLoopCounts::default();
         while step <= params.num_steps {
             let mut counts = SelfLoopCounts::default();
-            let mut proposals = Vec::<RecomProposal>::new();
+            let mut proposals = Vec::<(usize, RecomProposal)>::new();
+            // This is where the proposals are assigned
             for _ in 0..n_threads {
                 let packet: ResultPacket = result_recv.recv().unwrap();
                 counts = counts + packet.counts;
                 proposals.extend(packet.proposals);
             }
+
             let mut loops = counts.sum();
             if proposals.len() > 0 {
                 // Sample events without replacement.
+                proposals.sort_by(|a, b| a.0.cmp(&b.0));
+
                 let mut total = loops + proposals.len();
                 while total > 0 {
                     step += 1;
@@ -366,12 +374,12 @@ pub fn multi_chain(
                         }
                         let proposal = &proposals[rng.gen_range(0..proposals.len())];
                         for job in job_sends.iter() {
-                            next_batch(job, Some(proposal.clone()), batch_size);
+                            next_batch(job, Some(proposal.1.clone()), batch_size);
                         }
                         stats_send
                             .send(StepPacket {
                                 step: step,
-                                proposal: Some(proposal.clone()),
+                                proposal: Some(proposal.1.clone()),
                                 counts: sampled,
                                 terminate: false,
                             })

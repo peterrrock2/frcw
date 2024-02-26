@@ -29,11 +29,15 @@ pub fn from_networkx(
     let raw_nodes = data["nodes"].as_array().context("Expected `nodes` array")?;
     let assignments: Vec<u32> = raw_nodes
         .iter()
-        .map(|node| node[assignment_col].as_u64())
-        .collect::<Option<Vec<u64>>>()
-        .context("Expected integer node labels")?
-        .iter()
-        .map(|a| *a as u32)
+        .map(|node| {
+            match &node[assignment_col] {
+                serde_json::Value::Number(num) => num.as_u64().unwrap() as u32,
+                serde_json::Value::String(ref s) => s.parse::<u32>().unwrap(),
+                _ => panic!("{}{}",
+                            "Unexpected entry type in assignment column. ",
+                            "Please make sure that all entries can be interpreted as positive numbers."),
+            }
+        })
         .collect();
     let partition = Partition::from_assignments(&graph, &assignments)?;
     return Ok((graph, partition));
@@ -70,7 +74,7 @@ pub fn graph_from_networkx(
     let mut edges_start = vec![0 as usize; num_nodes];
     let mut attr = HashMap::new();
     for col in columns.to_vec().into_iter() {
-        attr.insert(col, Vec::<u32>::with_capacity(num_nodes));
+        attr.insert(col, Vec::<String>::with_capacity(num_nodes));
     }
 
     for (index, (node, adj)) in raw_nodes.iter().zip(raw_adj.iter()).enumerate() {
@@ -83,7 +87,13 @@ pub fn graph_from_networkx(
             .collect();
         for col in columns.iter() {
             if let Some(data) = attr.get_mut(col) {
-                data.push(node[col].as_u64().unwrap() as u32);
+                match node.get(col) {
+                    Some(value) => data.push(value.to_string()),
+                    None => {
+                        eprintln!("Failed to unwrap at column '{}', value {:?}", col, node[col]);
+                        panic!("Unexpected None while unwrapping.");
+                    }
+                }
             }
         }
         pops.push(node[pop_col].as_u64().unwrap() as u32);

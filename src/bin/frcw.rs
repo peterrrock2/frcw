@@ -131,7 +131,7 @@ fn main() {
     let writer_str = matches.value_of("writer").unwrap();
     let st_counts = matches.is_present("spanning_tree_counts");
     let cut_edges_count = matches.is_present("cut_edges_count");
-    let sum_cols = matches
+    let mut sum_cols: Vec<String> = matches
         .values_of("sum_cols")
         .unwrap_or_default()
         .map(|c| c.to_string())
@@ -164,10 +164,20 @@ fn main() {
 
     assert!(tol >= 0.0 && tol <= 1.0);
 
+    let region_weights = parse_region_weights_config(region_weights_raw);
+    // Add the keys in the region weights to sum_cols if they are not there already
+    // so that the user doesn't have to
+    if let Some(weight_pairs_vec) = &region_weights {
+        for (key, _) in weight_pairs_vec.iter() {
+            if !sum_cols.contains(&key) {
+                sum_cols.push(key.clone().to_string());
+            }
+        }
+    }
+
     let (graph, partition) = from_networkx(&graph_json, pop_col, assignment_col, sum_cols).unwrap();
     let avg_pop = (graph.total_pop as f64) / (partition.num_dists as f64);
-    let region_weights = parse_region_weights_config(region_weights_raw);
-
+    
     let params = RecomParams {
         min_pop: ((1.0 - tol) * avg_pop as f64).floor() as u32,
         max_pop: ((1.0 + tol) * avg_pop as f64).ceil() as u32,
