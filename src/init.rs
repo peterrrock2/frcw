@@ -33,14 +33,19 @@ pub fn from_networkx(
     let raw_nodes = data["nodes"].as_array().unwrap();
     let assignments: Vec<u32> = raw_nodes
         .iter()
-        .map(|node| {
-            match &node[assignment_col] {
-                serde_json::Value::Number(num) => num.as_u64().unwrap() as u32,
-                serde_json::Value::String(ref s) => s.parse::<u32>().unwrap(),
-                _ => panic!("{}{}",
-                            "Unexpected entry type in assignment column. ",
-                            "Please make sure that all entries can be interpreted as positive numbers."),
-            }
+        .enumerate()
+        .map(|(i, node)| match &node[assignment_col] {
+            serde_json::Value::Number(num) => num.as_u64().unwrap() as u32,
+            serde_json::Value::String(ref s) => s.parse::<u32>().unwrap(),
+            _ => panic!(
+                "{}{}{}",
+                "Unexpected entry type in assignment column. ",
+                format!(
+                    "Found {:?} at index {:?} in column {:?}.",
+                    node[assignment_col], i, assignment_col
+                ),
+                "Please make sure that all entries can be interpreted as positive numbers."
+            ),
         })
         .collect();
     let partition = Partition::from_assignments(&graph, &assignments).unwrap();
@@ -92,13 +97,29 @@ pub fn graph_from_networkx(
                 match node.get(col) {
                     Some(value) => data.push(value.to_string()),
                     None => {
-                        eprintln!("Failed to unwrap at column '{}', value {:?}", col, node[col]);
+                        eprintln!(
+                            "Failed to unwrap at column '{}', value {:?}",
+                            col, node[col]
+                        );
                         panic!("Unexpected None while unwrapping.");
                     }
                 }
             }
         }
-        pops.push(node[pop_col].as_u64().unwrap() as u32);
+        let new_pop = match &node[pop_col] {
+            serde_json::Value::Number(num) => num.as_u64().unwrap() as u32,
+            serde_json::Value::String(ref s) => s.parse::<u32>().unwrap(),
+            _ => panic!(
+                "{}{}{}",
+                "Unexpected entry type in population column. ",
+                format!(
+                    "Found {:?} at index {:?} in column {:?}.",
+                    node[pop_col], index, pop_col
+                ),
+                "Please make sure that all entries can be interpreted as positive numbers."
+            ),
+        };
+        pops.push(new_pop);
         neighbors.push(node_neighbors.clone());
 
         for neighbor in &node_neighbors {
