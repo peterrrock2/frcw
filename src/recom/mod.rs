@@ -4,7 +4,6 @@ use crate::graph::Graph;
 use crate::partition::Partition;
 use rand::rngs::SmallRng;
 use rand::Rng;
-use std::result::Result;
 
 /// ReCom-based optimization.
 pub mod opt;

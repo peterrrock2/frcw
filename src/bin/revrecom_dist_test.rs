@@ -115,6 +115,8 @@ fn main() {
         variant: RecomVariant::Reversible,
         region_weights: None,
     };
-    let writer: Box<dyn StatsWriter> = Box::new(AssignmentsOnlyWriter::new(true));
+
+    let output_buffer = Box::new(std::io::BufWriter::new(std::io::stdout()));
+    let writer: Box<dyn StatsWriter> = Box::new(AssignmentsOnlyWriter::new(true, output_buffer));
     multi_chain(&graph, &partition, writer, &params, n_threads, batch_size);
 }

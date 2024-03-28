@@ -14,7 +14,6 @@ use frcw::stats::partition_attr_sums;
 use serde_json::json;
 use serde_json::Value;
 use sha3::{Digest, Sha3_256};
-use std::marker::Send;
 use std::path::PathBuf;
 use std::{fs, io};
 
