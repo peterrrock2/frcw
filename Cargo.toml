@@ -1,8 +1,8 @@
 [package]
 name = "frcw"
-version = "0.1.0"
-authors = ["Parker J. Rule <parker.rule@tufts.edu>"]
-edition = "2018"
+version = "0.1.1"
+authors = ["Parker J. Rule <parker.rule@tufts.edu>", "Peter Rock <peter.r.rock2@gmail.com>"]
+edition = "2021"
 
 [dependencies]
 clap = "2.33.4"
@@ -19,6 +19,7 @@ serde_json = "1.0.64"
 sha3 = "0.10.0"
 snafu = "0.7.0"
 itertools = "0.10.2"
+binary-ensemble = {git = "https://github.com/peterrrock2/binary-ensemble.git", branch = "dev/0.1.1"}
 
 [dev-dependencies]
 rstest = "0.10.0"
@@ -45,3 +46,4 @@ debug = false
 lto = true
 codegen-units = 1
 panic = "abort"
+
