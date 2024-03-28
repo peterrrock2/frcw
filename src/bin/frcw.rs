@@ -8,7 +8,10 @@ use frcw::config::parse_region_weights_config;
 use frcw::init::from_networkx;
 use frcw::recom::run::multi_chain;
 use frcw::recom::{RecomParams, RecomVariant};
-use frcw::stats::{AssignmentsOnlyWriter, JSONLWriter, PcompressWriter, StatsWriter, TSVWriter};
+use frcw::stats::{
+    AssignmentsOnlyWriter, BenWriter, CanonicalWriter, JSONLWriter, PcompressWriter, StatsWriter,
+    TSVWriter,
+};
 use serde_json::json;
 use sha3::{Digest, Sha3_256};
 use std::path::PathBuf;
@@ -107,7 +110,14 @@ fn main() {
                 .takes_value(true)
                 .help("Region columns with weights for region-aware ReCom."),
         )
-        .arg(Arg::with_name("cut_edges_count").long("cut-edges-count"));
+        .arg(Arg::with_name("cut_edges_count").long("cut-edges-count"))
+        .arg(
+            Arg::with_name("output-file")
+                .long("output-file")
+                .short("o")
+                .takes_value(true)
+                .help("The path to write the output to."),
+        );
     if cfg!(feature = "linalg") {
         cli = cli.arg(Arg::with_name("spanning_tree_counts").long("st-counts"));
     }
@@ -146,13 +156,37 @@ fn main() {
         "district-pairs-region-aware" => RecomVariant::DistrictPairsRegionAware,
         bad => panic!("Parameter error: invalid variant '{}'", bad),
     };
+
+    let output_buffer: Box<dyn io::Write + Send> = match matches.value_of("output-file") {
+        Some(path) => {
+            let path = std::path::Path::new(path);
+            if path.exists() {
+                panic!("Output file already exists.");
+            };
+            Box::new(io::BufWriter::new(fs::File::create(path).unwrap()))
+        }
+        None => Box::new(io::BufWriter::new(std::io::stdout())),
+    };
+
     let writer: Box<dyn StatsWriter> = match writer_str {
-        "tsv" => Box::new(TSVWriter::new()),
-        "jsonl" => Box::new(JSONLWriter::new(false, st_counts, cut_edges_count)),
-        "pcompress" => Box::new(PcompressWriter::new()),
-        "jsonl-full" => Box::new(JSONLWriter::new(true, st_counts, cut_edges_count)),
-        "assignments" => Box::new(AssignmentsOnlyWriter::new(false)),
-        "canonical-assignments" => Box::new(AssignmentsOnlyWriter::new(true)),
+        "tsv" => Box::new(TSVWriter::new(output_buffer)),
+        "jsonl" => Box::new(JSONLWriter::new(
+            false,
+            st_counts,
+            cut_edges_count,
+            output_buffer,
+        )),
+        "pcompress" => Box::new(PcompressWriter::new(output_buffer)),
+        "jsonl-full" => Box::new(JSONLWriter::new(
+            true,
+            st_counts,
+            cut_edges_count,
+            output_buffer,
+        )),
+        "assignments" => Box::new(AssignmentsOnlyWriter::new(false, output_buffer)),
+        "canonicalized-assignments" => Box::new(AssignmentsOnlyWriter::new(true, output_buffer)),
+        "canonical" => Box::new(CanonicalWriter::new(output_buffer)),
+        "ben" => Box::new(BenWriter::new(output_buffer)),
         bad => panic!("Parameter error: invalid writer '{}'", bad),
     };
     if variant == RecomVariant::Reversible && balance_ub == 0 {
@@ -174,7 +208,7 @@ fn main() {
 
     let (graph, partition) = from_networkx(&graph_json, pop_col, assignment_col, sum_cols).unwrap();
     let avg_pop = (graph.total_pop as f64) / (partition.num_dists as f64);
-    
+
     let params = RecomParams {
         min_pop: ((1.0 - tol) * avg_pop as f64).floor() as u32,
         max_pop: ((1.0 + tol) * avg_pop as f64).ceil() as u32,
