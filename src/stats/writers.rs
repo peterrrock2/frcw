@@ -268,7 +268,7 @@ impl StatsWriter for JSONLWriter {
             );
         }
         self.output
-            .write_all(format!("{}", json!({ "init": stats }).to_string()).as_bytes())
+            .write_all(format!("{}\n", json!({ "init": stats }).to_string()).as_bytes())
             .expect("Failed to write to output");
         Ok(())
     }
@@ -306,7 +306,7 @@ impl StatsWriter for JSONLWriter {
             );
         }
         self.output
-            .write_all(format!("{}", json!({ "step": step }).to_string()).as_bytes())
+            .write_all(format!("{}\n", json!({ "step": step }).to_string()).as_bytes())
             .expect("Failed to write to output");
         Ok(())
     }
@@ -368,7 +368,7 @@ impl StatsWriter for CanonicalWriter {
         self.output
             .write_all(
                 format!(
-                    "{}",
+                    "{}\n",
                     json!({
                         "assignment": partition.assignments,
                         "sample": 1,
@@ -393,7 +393,7 @@ impl StatsWriter for CanonicalWriter {
             self.output
                 .write_all(
                     format!(
-                        "{}",
+                        "{}\n",
                         json!({
                             "assignment": self.previous_assignment,
                             "sample": i,
@@ -406,7 +406,7 @@ impl StatsWriter for CanonicalWriter {
         self.output
             .write_all(
                 format!(
-                    "{}",
+                    "{}\n",
                     json!({
                         "assignment": partition.assignments,
                         "sample": step+1,
