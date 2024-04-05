@@ -19,7 +19,7 @@ serde_json = "1.0.64"
 sha3 = "0.10.0"
 snafu = "0.7.0"
 itertools = "0.10.2"
-binary-ensemble = {git = "https://github.com/peterrrock2/binary-ensemble.git", branch = "dev/0.1.1"}
+binary-ensemble = "^0.1.1"
 
 [dev-dependencies]
 rstest = "0.10.0"

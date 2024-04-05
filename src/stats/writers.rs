@@ -370,7 +370,7 @@ impl StatsWriter for CanonicalWriter {
                 format!(
                     "{}\n",
                     json!({
-                        "assignment": partition.assignments,
+                        "assignment": self.previous_assignment,
                         "sample": 1,
                     })
                 )
@@ -403,24 +403,24 @@ impl StatsWriter for CanonicalWriter {
                 )
                 .expect("Failed to write to output");
         }
-        self.output
-            .write_all(
-                format!(
-                    "{}\n",
-                    json!({
-                        "assignment": partition.assignments,
-                        "sample": step+1,
-                    })
-                )
-                .as_bytes(),
-            )
-            .expect("Failed to write to output");
         self.previous_assignment = partition
             .assignments
             .clone()
             .iter()
             .map(|x| x + 1)
             .collect();
+        self.output
+            .write_all(
+                format!(
+                    "{}\n",
+                    json!({
+                        "assignment": self.previous_assignment,
+                        "sample": step+1,
+                    })
+                )
+                .as_bytes(),
+            )
+            .expect("Failed to write to output");
         Ok(())
     }
 
