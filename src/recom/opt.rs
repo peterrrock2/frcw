@@ -17,7 +17,6 @@ use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use serde_json::json;
 use std::collections::HashMap;
-use std::marker::Send;
 pub type ScoreValue = f64;
 
 /// A unit of multithreaded work.

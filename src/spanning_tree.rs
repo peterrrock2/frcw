@@ -285,8 +285,12 @@ mod rmst {
             rng.fill(&mut self.weights[..]);
             for (region_col, region_weight) in self.region_weights.iter() {
                 for (idx, edge) in graph.edges.iter().enumerate() {
-                    if graph.attr[region_col][edge.0] != graph.attr[region_col][edge.1] {
-                        self.weights[idx] -= region_weight;
+                    // Up weight for edges between nodes in the same region
+                    // so mst will more favorably pick edges between regions
+                    if graph.attr[region_col][edge.0] != "null" && graph.attr[region_col][edge.0] != "" &&
+                    graph.attr[region_col][edge.1] != "null" && graph.attr[region_col][edge.1] != "" &&
+                    graph.attr[region_col][edge.0] == graph.attr[region_col][edge.1] {
+                            self.weights[idx] += region_weight;
                     }
                 }
             }

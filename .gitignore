@@ -10,3 +10,6 @@ target/
 .*.swo
 ~*~
 .DS_Store
+test_logs/
+test_outputs/
+dev_files/

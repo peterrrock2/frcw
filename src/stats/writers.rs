@@ -7,7 +7,7 @@ use crate::stats::{partition_sums, proposal_sums, SelfLoopCounts, SelfLoopReason
 use pcompress::diff::Diff;
 use pcompress::encode::export_diff;
 use serde_json::{json, to_value, Value};
-use std::io::{stdout, BufWriter, Result, Stdout, Write};
+use std::io::{BufWriter, Result, Write};
 
 /// A standard interface for writing steps and statistics to stdout.
 /// TODO: allow direct output to a file (e.g. in Parquet format).
@@ -47,18 +47,46 @@ pub trait StatsWriter: Send {
 ///   * `b_pop` - The population of the new `b`-district.
 ///   * `a_nodes` - The list of node indices in the new `a`-district.
 ///   * `b_nodes` - The list of node indices in the new `b`-district.
-pub struct TSVWriter {}
+pub struct TSVWriter {
+    // The output stream that we would like to write to.
+    output: Box<dyn Write + Send>,
+}
 
 /// Writes assignments in space-delimited format (with step number prefix).
 pub struct AssignmentsOnlyWriter {
     /// Determines whether to canonicalize assignment vectors.
     canonicalize: bool,
+    /// The output stream that we would like to write to.
+    output: Box<dyn Write + Send>,
+}
+
+/// Writes out assignments in sandardizable format for generic
+/// ensembles of plans. Will produce a JSONL file with the line
+/// formatting:
+///
+/// ```json
+/// {"assignment": <assignment-vector>, "sample": <sample-number>}
+/// ```
+///
+/// where the sample number is indexed from 1. This will also
+/// create a copy JSONL line for each step in a self loop
+/// to ensure that we can properly collect statistical data.
+pub struct CanonicalWriter {
+    /// The previous assignment vector. Used to fill in self loops.
+    previous_assignment: Vec<u32>,
+    /// The output stream that we would like to write to.
+    output: Box<dyn Write + Send>,
+}
+
+pub struct BenWriter {
+    previous_assignment: Vec<u32>,
+    output: Box<dyn Write + Send>,
 }
 
 /// Writes assignments in Max Fan's `pcompress` binary format.
 pub struct PcompressWriter {
-    /// A buffered writer wrapping stdout used internally by pcompress.
-    writer: BufWriter<Stdout>,
+    /// A buffered writer used internally by pcompress.
+    writer: BufWriter<Box<dyn Write + Send>>,
     /// Diff buffer (reused across steps).
     diff: Diff,
 }
@@ -71,25 +99,35 @@ pub struct JSONLWriter {
     spanning_tree_counts: bool,
     /// Determines whether to compute cut edge counts for each step.
     cut_edges_count: bool,
+    // The output stream that we would like to write to.
+    output: Box<dyn Write + Send>,
 }
 
 impl TSVWriter {
-    pub fn new() -> TSVWriter {
-        TSVWriter {}
+    pub fn new(output: Box<dyn Write + Send>) -> TSVWriter {
+        TSVWriter { output: output }
     }
 }
 
 impl AssignmentsOnlyWriter {
-    pub fn new(canonicalize: bool) -> AssignmentsOnlyWriter {
+    pub fn new(canonicalize: bool, output: Box<dyn Write + Send>) -> AssignmentsOnlyWriter {
         AssignmentsOnlyWriter {
+            output: output,
             canonicalize: canonicalize,
         }
     }
 
+    /// Canonicalizes the assignment vector.
+    /// Meaning that instead of generating an assigmment
+    /// vector of the form
+    /// [2, 2, 2, 2, 3, 0, 0, 0, 3, 3, 1, 1, 3, 1, 1, 1]
+    /// the values are reassigned by order of appearance
+    /// indexed by 1, so the previous vector would become
+    /// [1, 1, 1, 1, 2, 3, 3, 3, 2, 2, 4, 4, 2, 4, 4, 4]
     fn canonicalize_assignments(&self, partition: &Partition) -> Vec<u32> {
         let mut canon = partition.assignments.clone();
         let mut dist_mapping = vec![0; partition.num_dists as usize];
-        let mut cur_dist = 0;
+        let mut cur_dist = 1;
         for (idx, &assn) in partition.assignments.iter().enumerate() {
             if dist_mapping[assn as usize] == 0 {
                 dist_mapping[assn as usize] = cur_dist;
@@ -101,12 +139,36 @@ impl AssignmentsOnlyWriter {
     }
 }
 
+impl CanonicalWriter {
+    pub fn new(output: Box<dyn Write + Send>) -> CanonicalWriter {
+        CanonicalWriter {
+            previous_assignment: Vec::new(),
+            output: output,
+        }
+    }
+}
+
+impl BenWriter {
+    pub fn new(output: Box<dyn Write + Send>) -> BenWriter {
+        BenWriter {
+            previous_assignment: Vec::new(),
+            output: output,
+        }
+    }
+}
+
 impl JSONLWriter {
-    pub fn new(nodes: bool, spanning_tree_counts: bool, cut_edges_count: bool) -> JSONLWriter {
+    pub fn new(
+        nodes: bool,
+        spanning_tree_counts: bool,
+        cut_edges_count: bool,
+        output: Box<dyn Write + Send>,
+    ) -> JSONLWriter {
         JSONLWriter {
             nodes: nodes,
             spanning_tree_counts: spanning_tree_counts,
             cut_edges_count: cut_edges_count,
+            output: output,
         }
     }
 
@@ -160,19 +222,24 @@ impl StatsWriter for TSVWriter {
         proposal: &RecomProposal,
         counts: &SelfLoopCounts,
     ) -> Result<()> {
-        println!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:?}\t{:?}",
-            step,
-            counts.get(SelfLoopReason::NonAdjacent),
-            counts.get(SelfLoopReason::NoSplit),
-            counts.get(SelfLoopReason::SeamLength),
-            proposal.a_label,
-            proposal.b_label,
-            proposal.a_pop,
-            proposal.b_pop,
-            proposal.a_nodes,
-            proposal.b_nodes
-        );
+        self.output
+            .write_all(
+                format!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:?}\t{:?}\n",
+                    step,
+                    counts.get(SelfLoopReason::NonAdjacent),
+                    counts.get(SelfLoopReason::NoSplit),
+                    counts.get(SelfLoopReason::SeamLength),
+                    proposal.a_label,
+                    proposal.b_label,
+                    proposal.a_pop,
+                    proposal.b_pop,
+                    proposal.a_nodes,
+                    proposal.b_nodes
+                )
+                .as_bytes(),
+            )
+            .expect("Failed to write to output");
         Ok(())
     }
 
@@ -200,7 +267,9 @@ impl StatsWriter for JSONLWriter {
                 to_value(cut_edges_count).unwrap(),
             );
         }
-        println!("{}", json!({ "init": stats }).to_string());
+        self.output
+            .write_all(format!("{}\n", json!({ "init": stats }).to_string()).as_bytes())
+            .expect("Failed to write to output");
         Ok(())
     }
 
@@ -236,7 +305,9 @@ impl StatsWriter for JSONLWriter {
                 to_value(cut_edges_count).unwrap(),
             );
         }
-        println!("{}", json!({ "step": step }).to_string());
+        self.output
+            .write_all(format!("{}\n", json!({ "step": step }).to_string()).as_bytes())
+            .expect("Failed to write to output");
         Ok(())
     }
 
@@ -248,9 +319,13 @@ impl StatsWriter for JSONLWriter {
 impl StatsWriter for AssignmentsOnlyWriter {
     fn init(&mut self, _graph: &Graph, partition: &Partition) -> Result<()> {
         if self.canonicalize {
-            println!("0,{:?}", self.canonicalize_assignments(partition));
+            self.output
+                .write_all(format!("0,{:?}\n", self.canonicalize_assignments(partition)).as_bytes())
+                .expect("Failed to write to output");
         } else {
-            println!("0,{:?}", partition.assignments);
+            self.output
+                .write_all(format!("0,{:?}\n", partition.assignments).as_bytes())
+                .expect("Failed to write to output");
         }
         Ok(())
     }
@@ -264,9 +339,15 @@ impl StatsWriter for AssignmentsOnlyWriter {
         _counts: &SelfLoopCounts,
     ) -> Result<()> {
         if self.canonicalize {
-            println!("{},{:?}", step, self.canonicalize_assignments(partition));
+            self.output
+                .write_all(
+                    format!("{},{:?}\n", step, self.canonicalize_assignments(partition)).as_bytes(),
+                )
+                .expect("Failed to write to output");
         } else {
-            println!("{},{:?}", step, partition.assignments);
+            self.output
+                .write_all(format!("{},{:?}\n", step, partition.assignments).as_bytes())
+                .expect("Failed to write to output");
         }
         Ok(())
     }
@@ -276,10 +357,151 @@ impl StatsWriter for AssignmentsOnlyWriter {
     }
 }
 
+impl StatsWriter for CanonicalWriter {
+    fn init(&mut self, _graph: &Graph, partition: &Partition) -> Result<()> {
+        self.previous_assignment = partition
+            .assignments
+            .clone()
+            .iter()
+            .map(|x| x + 1)
+            .collect();
+        self.output
+            .write_all(
+                format!(
+                    "{}\n",
+                    json!({
+                        "assignment": self.previous_assignment,
+                        "sample": 1,
+                    })
+                )
+                .as_bytes(),
+            )
+            .expect("Failed to write to output");
+        Ok(())
+    }
+
+    fn step(
+        &mut self,
+        step: u64,
+        _graph: &Graph,
+        partition: &Partition,
+        _proposal: &RecomProposal,
+        counts: &SelfLoopCounts,
+    ) -> Result<()> {
+        let tot_count = counts.sum();
+        for i in step - tot_count as u64 + 1..step + 1 {
+            self.output
+                .write_all(
+                    format!(
+                        "{}\n",
+                        json!({
+                            "assignment": self.previous_assignment,
+                            "sample": i,
+                        })
+                    )
+                    .as_bytes(),
+                )
+                .expect("Failed to write to output");
+        }
+        self.previous_assignment = partition
+            .assignments
+            .clone()
+            .iter()
+            .map(|x| x + 1)
+            .collect();
+        self.output
+            .write_all(
+                format!(
+                    "{}\n",
+                    json!({
+                        "assignment": self.previous_assignment,
+                        "sample": step+1,
+                    })
+                )
+                .as_bytes(),
+            )
+            .expect("Failed to write to output");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl StatsWriter for BenWriter {
+    fn init(&mut self, _graph: &Graph, partition: &Partition) -> Result<()> {
+        self.previous_assignment = partition
+            .assignments
+            .clone()
+            .iter()
+            .map(|x| x + 1)
+            .collect();
+        self.output
+            .write_all(b"STANDARD BEN FILE")
+            .expect("Failed to write to output");
+        self.output
+            .write_all(
+                ben::encode::encode_ben_vec_from_assign(
+                    (&self.previous_assignment)
+                        .iter()
+                        .map(|&x| x as u16)
+                        .collect(),
+                )
+                .as_slice(),
+            )
+            .expect("Failed to write to output");
+        Ok(())
+    }
+
+    fn step(
+        &mut self,
+        step: u64,
+        _graph: &Graph,
+        partition: &Partition,
+        _proposal: &RecomProposal,
+        counts: &SelfLoopCounts,
+    ) -> Result<()> {
+        let tot_count = counts.sum();
+        for _ in step - tot_count as u64 + 1..step + 1 {
+            let assign = self
+                .previous_assignment
+                .iter()
+                .map(|&x| x as u16)
+                .collect::<Vec<u16>>();
+            self.output
+                .write_all(ben::encode::encode_ben_vec_from_assign(assign).as_slice())
+                .expect("Failed to write output")
+        }
+        self.previous_assignment = partition
+            .assignments
+            .clone()
+            .iter()
+            .map(|x| x + 1)
+            .collect();
+        self.output
+            .write_all(
+                ben::encode::encode_ben_vec_from_assign(
+                    (&self.previous_assignment)
+                        .iter()
+                        .map(|&x| x as u16)
+                        .collect(),
+                )
+                .as_slice(),
+            )
+            .expect("Failed to write to output");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl PcompressWriter {
-    pub fn new() -> PcompressWriter {
+    pub fn new(output: Box<dyn Write + Send>) -> PcompressWriter {
         PcompressWriter {
-            writer: BufWriter::new(stdout()),
+            writer: BufWriter::new(output),
             diff: Diff::new(),
         }
     }

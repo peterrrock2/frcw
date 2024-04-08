@@ -1,16 +1,18 @@
+#![allow(dead_code)]
+
 //! Main CLI for GerryQL.
 use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-use clap::{value_t, App, Arg};
-use frcw::init::graph_from_networkx;
+use clap::{App, Arg};
+// use frcw::init::graph_from_networkx;
 use petgraph::graph::{Graph, NodeIndex};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::fs::{self, File};
+// use std::fs::{self, File};
 use std::io::{self, BufRead};
-use std::path::{Path, PathBuf};
+// use std::path::{Path, PathBuf};
 
 fn main() {
     let cli = App::new("gerryql")
@@ -38,7 +40,7 @@ fn main() {
                 .default_value("1")
                 .help("The number of threads to use."),
         );
-    let matches = cli.get_matches();
+    let _matches = cli.get_matches();
     /*
     let n_threads = value_t!(matches.value_of("n_threads"), usize).unwrap_or_else(|e| e.exit());
     let graph_json = fs::canonicalize(PathBuf::from(matches.value_of("graph_json").unwrap()))

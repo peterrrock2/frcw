@@ -47,7 +47,7 @@ pub struct Graph {
     /// (Should be equal to the sum of `pops`.)
     pub total_pop: u32,
     /// Additional node attributes (optional).
-    pub attr: HashMap<String, Vec<u32>>,
+    pub attr: HashMap<String, Vec<String>>,
 }
 
 impl Graph {

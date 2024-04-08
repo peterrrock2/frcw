@@ -169,12 +169,12 @@ impl Partition {
             } else {
                 buf.graph.attr.insert(
                     key.to_string(),
-                    Vec::<u32>::with_capacity(buf.raw_nodes.len()),
+                    Vec::<String>::with_capacity(buf.raw_nodes.len()),
                 );
             }
             let buf_vals = buf.graph.attr.get_mut(key).unwrap();
             for &node in buf.raw_nodes.iter() {
-                buf_vals.push(vals[node]);
+                buf_vals.push(vals[node].clone());
             }
         }
     }
