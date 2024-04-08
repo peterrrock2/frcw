@@ -443,7 +443,10 @@ impl StatsWriter for BenWriter {
         self.output
             .write_all(
                 ben::encode::encode_ben_vec_from_assign(
-                    (&partition.assignments).iter().map(|&x| x as u16).collect(),
+                    (&self.previous_assignment)
+                        .iter()
+                        .map(|&x| x as u16)
+                        .collect(),
                 )
                 .as_slice(),
             )
@@ -470,20 +473,23 @@ impl StatsWriter for BenWriter {
                 .write_all(ben::encode::encode_ben_vec_from_assign(assign).as_slice())
                 .expect("Failed to write output")
         }
-        self.output
-            .write_all(
-                ben::encode::encode_ben_vec_from_assign(
-                    (&partition.assignments).iter().map(|&x| x as u16).collect(),
-                )
-                .as_slice(),
-            )
-            .expect("Failed to write to output");
         self.previous_assignment = partition
             .assignments
             .clone()
             .iter()
             .map(|x| x + 1)
             .collect();
+        self.output
+            .write_all(
+                ben::encode::encode_ben_vec_from_assign(
+                    (&self.previous_assignment)
+                        .iter()
+                        .map(|&x| x as u16)
+                        .collect(),
+                )
+                .as_slice(),
+            )
+            .expect("Failed to write to output");
         Ok(())
     }
 
