@@ -524,6 +524,15 @@ impl StatsWriter for PcompressWriter {
         proposal: &RecomProposal,
         counts: &SelfLoopCounts,
     ) -> Result<()> {
+        // Write out self-loops first. The counts here
+        // are the number of self-loops since the last
+        // accepted proposal (i.e. the number of times the
+        // last proposal was repeated before acceptance).
+        self.diff.reset();
+        for _ in 0..counts.sum() {
+            export_diff(&mut self.writer, &self.diff);
+        }
+
         // Write out the actual delta.
         self.diff.reset();
         for &node in proposal.a_nodes.iter() {
@@ -534,11 +543,6 @@ impl StatsWriter for PcompressWriter {
         }
         export_diff(&mut self.writer, &self.diff);
 
-        // Write out self-loops.
-        self.diff.reset();
-        for _ in 0..counts.sum() {
-            export_diff(&mut self.writer, &self.diff);
-        }
         Ok(())
     }
 
