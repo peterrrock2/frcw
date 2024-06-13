@@ -1,6 +1,6 @@
 [package]
 name = "frcw"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Parker J. Rule <parker.rule@tufts.edu>", "Peter Rock <peter.r.rock2@gmail.com>"]
 edition = "2021"
 

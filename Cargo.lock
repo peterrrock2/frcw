@@ -549,7 +549,7 @@ dependencies = [
 
 [[package]]
 name = "frcw"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "approx 0.5.1",
  "binary-ensemble",
